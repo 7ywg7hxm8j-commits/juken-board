@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>受験生掲示板 - 受かろう</title>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red: #E83A2F;
+      --red-dark: #B52E25;
+      --red-light: #FF6B60;
+      --cream: #FAF7F2;
+      --ink: #1A1208;
+      --ink-light: #4A3F30;
+      --gold: #C9952A;
+      --gold-light: #F0C060;
+      --paper: #F5F0E8;
+      --border: #D4C9B0;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background: var(--cream);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      background: var(--ink);
+      padding: 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 3px solid var(--red);
+    }
+
+    .header-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .logo-main {
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      font-weight: 900;
+      font-size: 1.6rem;
+      color: var(--cream);
+      letter-spacing: -0.02em;
+    }
+
+    .logo-accent {
+      color: var(--red);
+    }
+
+    .logo-sub {
+      font-size: 0.72rem;
+      color: #888;
+      letter-spacing: 0.1em;
+    }
+
+    .header-nick {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nick-display {
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+
+    .nick-name {
+      color: var(--gold-light);
+      font-weight: 700;
+    }
+
+    .btn-change-nick {
+      font-size: 0.75rem;
+      background: none;
+      border: 1px solid #555;
+      color: #aaa;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .btn-change-nick:hover { border-color: var(--red); color: var(--red); }
+
+    /* ===== NICKNAME MODAL ===== */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10,8,4,0.85);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal {
+      background: var(--paper);
+      border: 2px solid var(--border);
+      border-radius: 4px;
+      padding: 48px 40px;
+      max-width: 420px;
+      width: 100%;
+      text-align: center;
+      animation: fadeUp 0.3s ease;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .modal-stamp {
+      width: 56px;
+      height: 56px;
+      background: var(--red);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 1.6rem;
+    }
+
+    .modal h2 {
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      font-weight: 900;
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+      color: var(--ink);
+    }
+
+    .modal p {
+      font-size: 0.85rem;
+      color: var(--ink-light);
+      margin-bottom: 28px;
+      line-height: 1.6;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid var(--border);
+      border-radius: 4px;
+      font-size: 1rem;
+      font-family: inherit;
+      background: white;
+      color: var(--ink);
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    .input-field:focus { border-color: var(--red); }
+
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      background: var(--red);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.2s;
+      letter-spacing: 0.05em;
+    }
+
+    .btn-primary:hover { background: var(--red-dark); }
+
+    /* ===== MAIN LAYOUT ===== */
+    .main-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    /* ===== VIEWS ===== */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ===== HOME VIEW ===== */
+    .home-hero {
+      text-align: center;
+      padding: 48px 0 40px;
+    }
+
+    .hero-eyebrow {
+      font-size: 0.78rem;
+      letter-spacing: 0.2em;
+      color: var(--red);
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .hero-title {
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      font-weight: 900;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      line-height: 1.15;
+      color: var(--ink);
+      margin-bottom: 16px;
+    }
+
+    .hero-title span { color: var(--red); }
+
+    .hero-sub {
+      font-size: 0.95rem;
+      color: var(--ink-light);
+      max-width: 500px;
+      margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+
+    /* Search / Create room bar */
+    .room-bar {
+      display: flex;
+      gap: 12px;
+      max-width: 640px;
+      margin: 0 auto 48px;
+    }
+
+    .room-bar .input-field {
+      margin: 0;
+      flex: 1;
+    }
+
+    .btn-create {
+      padding: 12px 20px;
+      background: var(--ink);
+      color: var(--cream);
+      border: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+      letter-spacing: 0.03em;
+    }
+
+    .btn-create:hover { background: var(--red); }
+
+    /* Section title */
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .section-label h2 {
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      font-weight: 900;
+      font-size: 1.1rem;
+      color: var(--ink);
+    }
+
+    .section-label .line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .section-label .count {
+      font-size: 0.8rem;
+      color: #999;
+      background: var(--paper);
+      border: 1px solid var(--border);
+      padding: 2px 10px;
+      border-radius: 20px;
+    }
+
+    /* Room grid */
+    .room-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .room-card {
+      background: white;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      padding: 22px 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .room-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--red);
+      transform: scaleX(0);
+      transition: transform 0.2s;
+      transform-origin: left;
+    }
+
+    .room-card:hover { border-color: var(--red); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    .room-card:hover::before { transform: scaleX(1); }
+
+    .room-card-univ {
+      font-size: 0.75rem;
+      color: var(--red);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .room-card-dept {
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--ink);
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+
+    .room-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 0.78rem;
+      color: #999;
+    }
+
+    .room-card-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .dot-online {
+      width: 6px;
+      height: 6px;
+      background: #4CAF50;
+      border-radius: 50%;
+      display: inline-block;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #bbb;
+    }
+
+    .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 0.9rem; line-height: 1.6; }
+
+    /* ===== CREATE ROOM MODAL ===== */
+    .create-modal {
+      background: var(--paper);
+      border: 2px solid var(--border);
+      border-radius: 4px;
+      padding: 40px;
+      max-width: 480px;
+      width: 100%;
+      animation: fadeUp 0.3s ease;
+    }
+
+    .create-modal h2 {
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      font-weight: 900;
+      font-size: 1.4rem;
+      margin-bottom: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--ink-light);
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .btn-ghost {
+      flex: 1;
+      padding: 12px;
+      background: none;
+      border: 1.5px solid var(--border);
+      color: var(--ink-light);
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-ghost:hover { border-color: var(--ink); color: var(--ink); }
+
+    .btn-primary-sm {
+      flex: 2;
+      padding: 12px;
+      background: var(--red);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-primary-sm:hover { background: var(--red-dark); }
+
+    /* ===== ROOM VIEW ===== */
+    .room-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 0 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+
+    .btn-back {
+      background: none;
+      border: 1.5px solid var(--border);
+      color: var(--ink-light);
+      padding: 8px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-family: inherit;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-back:hover { border-color: var(--ink); color: var(--ink); }
+
+    .room-header-info { flex: 1; }
+
+    .room-header-univ {
+      font-size: 0.78rem;
+      color: var(--red);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      margin-bottom: 3px;
+    }
+
+    .room-header-dept {
+      font-family: 'Zen Kaku Gothic New', sans-serif;
+      font-weight: 900;
+      font-size: 1.4rem;
+      color: var(--ink);
+    }
+
+    .online-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: #666;
+      background: white;
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 20px;
+    }
+
+    /* Chat area */
+    .chat-layout {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 280px);
+      min-height: 400px;
+    }
+
+    .messages-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .messages-area::-webkit-scrollbar { width: 4px; }
+    .messages-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .msg {
+      display: flex;
+      gap: 10px;
+      padding: 8px 4px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+
+    .msg:hover { background: rgba(0,0,0,0.02); }
+
+    .msg-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--cream);
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .msg-body { flex: 1; }
+
+    .msg-header {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 3px;
+    }
+
+    .msg-nick {
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: var(--ink);
+    }
+
+    .msg-nick.is-me { color: var(--red); }
+
+    .msg-time {
+      font-size: 0.72rem;
+      color: #bbb;
+    }
+
+    .msg-text {
+      font-size: 0.92rem;
+      line-height: 1.65;
+      color: var(--ink);
+      word-break: break-word;
+    }
+
+    .msg-system {
+      text-align: center;
+      font-size: 0.75rem;
+      color: #bbb;
+      padding: 8px 0;
+    }
+
+    /* Input bar */
+    .chat-input-bar {
+      border-top: 1.5px solid var(--border);
+      padding-top: 16px;
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      background: white;
+      color: var(--ink);
+      outline: none;
+      resize: none;
+      min-height: 46px;
+      max-height: 120px;
+      transition: border-color 0.2s;
+      line-height: 1.5;
+    }
+
+    .chat-input:focus { border-color: var(--red); }
+
+    .btn-send {
+      padding: 12px 22px;
+      background: var(--red);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 700;
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      height: 46px;
+      white-space: nowrap;
+    }
+
+    .btn-send:hover { background: var(--red-dark); }
+    .btn-send:disabled { background: #ccc; cursor: not-allowed; }
+
+    /* Loading */
+    .loading-spinner {
+      text-align: center;
+      padding: 40px;
+      color: #bbb;
+      font-size: 0.9rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .header-inner { padding: 12px 16px; }
+      .logo-main { font-size: 1.3rem; }
+      .main-container { padding: 20px 16px; }
+      .room-bar { flex-direction: column; }
+      .room-grid { grid-template-columns: 1fr; }
+      .modal, .create-modal { padding: 32px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-inner">
+      <div class="logo" onclick="goHome()">
+        <span class="logo-main">受<span class="logo-accent">験</span>板</span>
+        <span class="logo-sub">JUKEN BOARD</span>
+      </div>
+      <div class="header-nick" id="headerNick" style="display:none">
+        <span class="nick-display">投稿中：<span class="nick-name" id="nickDisplay"></span></span>
+        <button class="btn-change-nick" onclick="showNickModal()">変更</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- NICKNAME MODAL -->
+  <div class="overlay" id="nickOverlay">
+    <div class="modal">
+      <div class="modal-stamp">✏️</div>
+      <h2>ニックネームを入力</h2>
+      <p>登録不要。ニックネームだけで<br>すぐに参加できます。</p>
+      <input class="input-field" type="text" id="nickInput" placeholder="例：東大志望のけんた" maxlength="20"
+        onkeydown="if(event.key==='Enter') saveNick()">
+      <button class="btn-primary" onclick="saveNick()">参加する →</button>
+    </div>
+  </div>
+
+  <!-- CREATE ROOM MODAL -->
+  <div class="overlay" id="createOverlay" style="display:none">
+    <div class="create-modal">
+      <h2>🏫 新しい部屋を作る</h2>
+      <div class="form-group">
+        <label class="form-label">大学名</label>
+        <input class="input-field" type="text" id="newUniv" placeholder="例：東京大学" maxlength="30">
+      </div>
+      <div class="form-group">
+        <label class="form-label">学部・学科</label>
+        <input class="input-field" type="text" id="newDept" placeholder="例：理学部物理学科" maxlength="30">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeCreateModal()">キャンセル</button>
+        <button class="btn-primary-sm" onclick="createRoom()">部屋を作成 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main-container">
+
+    <!-- HOME VIEW -->
+    <div class="view active" id="viewHome">
+      <div class="home-hero">
+        <div class="hero-eyebrow">受験生専用 匿名掲示板</div>
+        <h1 class="hero-title">同じ大学を目指す<br><span>仲間</span>と繋がろう</h1>
+        <p class="hero-sub">大学・学部ごとの部屋で情報交換。<br>ニックネームだけで今すぐ参加できます。</p>
+      </div>
+
+      <div class="room-bar">
+        <input class="input-field" type="text" id="searchInput" placeholder="大学名・学部名で検索..." oninput="renderRooms()">
+        <button class="btn-create" onclick="showCreateModal()">＋ 部屋を作る</button>
+      </div>
+
+      <div class="section-label">
+        <h2>📋 部屋一覧</h2>
+        <div class="line"></div>
+        <div class="count" id="roomCount">0部屋</div>
+      </div>
+
+      <div class="room-grid" id="roomGrid">
+        <div class="loading-spinner">読み込み中...</div>
+      </div>
+    </div>
+
+    <!-- ROOM VIEW -->
+    <div class="view" id="viewRoom">
+      <div class="room-header">
+        <button class="btn-back" onclick="goHome()">← 一覧へ</button>
+        <div class="room-header-info">
+          <div class="room-header-univ" id="roomUnivLabel"></div>
+          <div class="room-header-dept" id="roomDeptLabel"></div>
+        </div>
+        <div class="online-badge">
+          <span class="dot-online"></span>
+          <span id="msgCountBadge">0</span> 件の投稿
+        </div>
+      </div>
+
+      <div class="chat-layout">
+        <div class="messages-area" id="messagesArea">
+          <div class="loading-spinner">メッセージを読み込み中...</div>
+        </div>
+
+        <div class="chat-input-bar">
+          <textarea class="chat-input" id="chatInput" placeholder="メッセージを入力... (Shift+Enterで送信)" rows="1"
+            onkeydown="if(event.key==='Enter' && event.shiftKey){ event.preventDefault(); sendMessage(); }"
+            oninput="autoResize(this)"></textarea>
+          <button class="btn-send" id="sendBtn" onclick="sendMessage()">送信</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getFirestore, collection, addDoc, getDocs, doc, onSnapshot,
+      query, orderBy, serverTimestamp, updateDoc, increment, getDoc
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB4bxCNuztkNxwNGKBSaVnK7ciZseAuAys",
+      authDomain: "juken-board.firebaseapp.com",
+      projectId: "juken-board",
+      storageBucket: "juken-board.firebasestorage.app",
+      messagingSenderId: "886266222276",
+      appId: "1:886266222276:web:759a454be0b0f3a3ed5b91"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // ===== STATE =====
+    let nickname = '';
+    let currentRoomId = null;
+    let unsubscribeMessages = null;
+    let allRooms = [];
+
+    // ===== NICK =====
+    window.showNickModal = () => {
+      document.getElementById('nickOverlay').style.display = 'flex';
+    };
+
+    window.saveNick = () => {
+      const val = document.getElementById('nickInput').value.trim();
+      if (!val) { alert('ニックネームを入力してください'); return; }
+      nickname = val;
+      localStorage.setItem('juken_nick', val);
+      document.getElementById('nickOverlay').style.display = 'none';
+      document.getElementById('headerNick').style.display = 'flex';
+      document.getElementById('nickDisplay').textContent = nickname;
+    };
+
+    // Init nick
+    const savedNick = localStorage.getItem('juken_nick');
+    if (savedNick) {
+      nickname = savedNick;
+      document.getElementById('nickInput').value = savedNick;
+      document.getElementById('nickOverlay').style.display = 'none';
+      document.getElementById('headerNick').style.display = 'flex';
+      document.getElementById('nickDisplay').textContent = nickname;
+    }
+
+    // ===== ROOMS =====
+    async function loadRooms() {
+      const snap = await getDocs(collection(db, 'rooms'));
+      allRooms = [];
+      snap.forEach(d => allRooms.push({ id: d.id, ...d.data() }));
+      allRooms.sort((a, b) => (b.msgCount || 0) - (a.msgCount || 0));
+      renderRooms();
+    }
+
+    window.renderRooms = () => {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allRooms.filter(r =>
+        r.univ.toLowerCase().includes(q) || r.dept.toLowerCase().includes(q)
+      );
+      const grid = document.getElementById('roomGrid');
+      document.getElementById('roomCount').textContent = filtered.length + '部屋';
+      if (filtered.length === 0) {
+        grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="icon">🔍</div><p>該当する部屋がありません<br>「部屋を作る」で新しく作れます</p></div>`;
+        return;
+      }
+      grid.innerHTML = filtered.map(r => `
+        <div class="room-card" onclick="enterRoom('${r.id}', '${escHtml(r.univ)}', '${escHtml(r.dept)}')">
+          <div class="room-card-univ">${escHtml(r.univ)}</div>
+          <div class="room-card-dept">${escHtml(r.dept)}</div>
+          <div class="room-card-meta">
+            <span>💬 ${r.msgCount || 0}件</span>
+          </div>
+        </div>
+      `).join('');
+    };
+
+    // ===== CREATE ROOM =====
+    window.showCreateModal = () => {
+      if (!nickname) { showNickModal(); return; }
+      document.getElementById('createOverlay').style.display = 'flex';
+    };
+
+    window.closeCreateModal = () => {
+      document.getElementById('createOverlay').style.display = 'none';
+    };
+
+    window.createRoom = async () => {
+      const univ = document.getElementById('newUniv').value.trim();
+      const dept = document.getElementById('newDept').value.trim();
+      if (!univ || !dept) { alert('大学名と学部名を入力してください'); return; }
+      const dup = allRooms.find(r => r.univ === univ && r.dept === dept);
+      if (dup) { alert('その部屋はすでに存在します'); closeCreateModal(); enterRoom(dup.id, dup.univ, dup.dept); return; }
+      const ref = await addDoc(collection(db, 'rooms'), { univ, dept, msgCount: 0, createdAt: serverTimestamp() });
+      closeCreateModal();
+      document.getElementById('newUniv').value = '';
+      document.getElementById('newDept').value = '';
+      await loadRooms();
+      enterRoom(ref.id, univ, dept);
+    };
+
+    // ===== ENTER ROOM =====
+    window.enterRoom = (roomId, univ, dept) => {
+      if (!nickname) { showNickModal(); return; }
+      currentRoomId = roomId;
+      document.getElementById('roomUnivLabel').textContent = univ;
+      document.getElementById('roomDeptLabel').textContent = dept;
+      document.getElementById('messagesArea').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+      showView('viewRoom');
+      subscribeMessages(roomId);
+    };
+
+    // ===== MESSAGES =====
+    function subscribeMessages(roomId) {
+      if (unsubscribeMessages) unsubscribeMessages();
+      const q = query(collection(db, 'rooms', roomId, 'messages'), orderBy('createdAt', 'asc'));
+      unsubscribeMessages = onSnapshot(q, snap => {
+        const area = document.getElementById('messagesArea');
+        const wasAtBottom = area.scrollHeight - area.scrollTop - area.clientHeight < 80;
+        const msgs = [];
+        snap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+        document.getElementById('msgCountBadge').textContent = msgs.length;
+        if (msgs.length === 0) {
+          area.innerHTML = `<div class="empty-state"><div class="icon">💬</div><p>まだメッセージがありません<br>最初の投稿をしてみよう！</p></div>`;
+          return;
+        }
+        area.innerHTML = msgs.map(m => {
+          const isMe = m.nick === nickname;
+          const avatarColor = stringToColor(m.nick);
+          const initials = m.nick.slice(0, 1);
+          const time = m.createdAt ? formatTime(m.createdAt.toDate()) : '';
+          return `
+            <div class="msg">
+              <div class="msg-avatar" style="background:${avatarColor}">${initials}</div>
+              <div class="msg-body">
+                <div class="msg-header">
+                  <span class="msg-nick ${isMe ? 'is-me' : ''}">${escHtml(m.nick)}</span>
+                  <span class="msg-time">${time}</span>
+                </div>
+                <div class="msg-text">${escHtml(m.text).replace(/\n/g, '<br>')}</div>
+              </div>
+            </div>`;
+        }).join('');
+        if (wasAtBottom) area.scrollTop = area.scrollHeight;
+      });
+    }
+
+    window.sendMessage = async () => {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text || !currentRoomId) return;
+      input.value = '';
+      autoResize(input);
+      const btn = document.getElementById('sendBtn');
+      btn.disabled = true;
+      try {
+        await addDoc(collection(db, 'rooms', currentRoomId, 'messages'), {
+          nick: nickname, text, createdAt: serverTimestamp()
+        });
+        await updateDoc(doc(db, 'rooms', currentRoomId), { msgCount: increment(1) });
+      } finally {
+        btn.disabled = false;
+        input.focus();
+      }
+    };
+
+    // ===== NAV =====
+    window.goHome = () => {
+      if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null; }
+      currentRoomId = null;
+      showView('viewHome');
+      loadRooms();
+    };
+
+    function showView(id) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    // ===== UTILS =====
+    window.autoResize = (el) => {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    };
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function formatTime(d) {
+      return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) +
+        ' ' + (d.getMonth()+1) + '/' + d.getDate();
+    }
+
+    function stringToColor(str) {
+      const colors = ['#C0392B','#1A5276','#117A65','#7D3C98','#A04000','#1F618D','#0E6655','#6C3483'];
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+      return colors[Math.abs(hash) % colors.length];
+    }
+
+    // Init
+    loadRooms();
+  </script>
+</body>
+</html>
