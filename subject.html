@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>回答共有 — 受験板</title>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .subject-header { padding: 16px; border-bottom: 1px solid var(--border); background: var(--paper); }
+    .subject-header .sup { font-size: 0.78rem; color: var(--ink-light); margin-bottom: 2px; }
+    .subject-header .title { font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 900; font-size: 1.15rem; }
+    .back-btn { background: none; border: none; color: #bbb; font-size: 1.2rem; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+    .back-btn:hover { color: white; }
+    .answer-body { max-width: 680px; margin: 0 auto; padding: 24px 16px 60px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="back-btn" onclick="history.back()">←</button>
+      <div class="logo" onclick="location.href='index.html'">
+        <span class="logo-main">受<span class="logo-accent">験</span>板</span>
+        <span class="logo-sub">JUKEN BOARD</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div id="headerNick" style="display:none;align-items:center;gap:10px;">
+        <span class="nick-display">投稿中：<span class="nick-name" id="nickDisplay"></span></span>
+        <button class="btn-change-nick" onclick="showNickModal()">変更</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ニックネームモーダル -->
+<div class="overlay" id="nickOverlay">
+  <div class="modal modal-center">
+    <div class="modal-icon">✏️</div>
+    <h2>ニックネームを入力</h2>
+    <p>登録不要。ニックネームだけで<br>すぐに参加できます。</p>
+    <input class="input-field" type="text" id="nickInput" placeholder="例：東大志望のけんた" maxlength="20"
+      onkeydown="if(event.key==='Enter') saveNick()">
+    <div style="margin-top:4px">
+      <button class="btn-primary" style="width:100%" onclick="saveNick()">参加する →</button>
+    </div>
+  </div>
+</div>
+
+<!-- 型作成モーダル -->
+<div class="overlay" id="schemaOverlay" style="display:none">
+  <div class="modal" style="max-width:560px;max-height:85vh;overflow-y:auto;">
+    <h2 style="margin-bottom:6px;">📋 問題の型を作成</h2>
+    <p style="font-size:0.82rem;color:var(--ink-light);margin-bottom:20px;">大問・問題タイプを設定してください</p>
+    <div id="schema-editor"></div>
+    <button class="btn-dashed" style="margin-top:8px" onclick="addDaimo()">＋ 大問を追加</button>
+    <div class="modal-actions" style="margin-top:20px">
+      <button class="btn-ghost" onclick="closeSchemaModal()">キャンセル</button>
+      <button class="btn-primary" onclick="saveSchema()">保存する →</button>
+    </div>
+  </div>
+</div>
+
+<div class="subject-header">
+  <div class="sup" id="subjectSup"></div>
+  <div class="title" id="subjectTitle">読み込み中...</div>
+</div>
+
+<div class="answer-body" id="answerBody">
+  <div class="loading">読み込み中...</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, getDocs, doc,
+  serverTimestamp, updateDoc, increment, getDoc, setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyB4bxCNuztkNxwNGKBSaVnK7ciZseAuAys",
+  authDomain: "juken-board.firebaseapp.com",
+  projectId: "juken-board",
+  storageBucket: "juken-board.firebasestorage.app",
+  messagingSenderId: "886266222276",
+  appId: "1:886266222276:web:759a454be0b0f3a3ed5b91"
+});
+const db = getFirestore(app);
+
+// URLパラメータ
+const params     = new URLSearchParams(location.search);
+const seriesId   = params.get('seriesId');
+const roomId     = params.get('roomId');
+const subjectId  = params.get('subjectId');
+const subjectName = decodeURIComponent(params.get('subjectName') || '');
+const supName    = decodeURIComponent(params.get('sup') || '');
+
+const CHOICE_FORMATS = ['1,2,3,4,5', 'a,b,c,d,e', 'ア,イ,ウ,エ,オ', 'A,B,C,D,E'];
+const Q_TYPE = {
+  choice:  { label: '選択',    color: '#1A5276' },
+  extract: { label: '抜き出し', color: '#117A65' },
+  essay:   { label: '記述',    color: '#7D3C98' },
+};
+
+let nickname  = localStorage.getItem('juken_nick') || '';
+let tempSchema = [];
+const pending  = {};
+
+// ===== ニックネーム =====
+function applyNick(nick) {
+  nickname = nick;
+  localStorage.setItem('juken_nick', nick);
+  document.getElementById('headerNick').style.display = 'flex';
+  document.getElementById('nickDisplay').textContent  = nick;
+}
+window.showNickModal = () => { document.getElementById('nickOverlay').style.display = 'flex'; };
+window.saveNick = () => {
+  const val = document.getElementById('nickInput').value.trim();
+  if (!val) { alert('ニックネームを入力してください'); return; }
+  document.getElementById('nickOverlay').style.display = 'none';
+  applyNick(val);
+  loadAnswerForm();
+};
+if (nickname) {
+  document.getElementById('nickInput').value = nickname;
+  document.getElementById('nickOverlay').style.display = 'none';
+  applyNick(nickname);
+}
+
+// ===== ヘッダー =====
+document.getElementById('subjectTitle').textContent = subjectName || '回答共有';
+document.getElementById('subjectSup').textContent   = supName;
+document.title = (subjectName || '回答共有') + ' — 受験板';
+
+// ===== ユーティリティ =====
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function choiceOpts(format, count) {
+  const map = {'1,2,3,4,5':['1','2','3','4','5'],'a,b,c,d,e':['a','b','c','d','e'],'ア,イ,ウ,エ,オ':['ア','イ','ウ','エ','オ'],'A,B,C,D,E':['A','B','C','D','E']};
+  return (map[format]||['1','2','3','4','5']).slice(0, count||4);
+}
+
+// Firestoreパス
+const subjectRef = () => doc(db, 'mosshi_series', seriesId, 'rooms', roomId, 'subjects', subjectId);
+const answersCol = () => collection(db, 'mosshi_series', seriesId, 'rooms', roomId, 'subjects', subjectId, 'answers');
+const myAnswerRef = () => doc(db, 'mosshi_series', seriesId, 'rooms', roomId, 'subjects', subjectId, 'answers', nickname || '__guest__');
+
+// ===== フォーム描画 =====
+async function loadAnswerForm() {
+  const container = document.getElementById('answerBody');
+  container.innerHTML = '<div class="loading">読み込み中...</div>';
+
+  const schemaSnap = await getDoc(subjectRef());
+  const schema     = schemaSnap.exists() ? (schemaSnap.data().schema || []) : [];
+  const mySnap     = await getDoc(myAnswerRef());
+  const myAnswers  = mySnap.exists() ? (mySnap.data().answers || {}) : {};
+  const allSnap    = await getDocs(answersCol());
+  const allAnswers = []; allSnap.forEach(d => allAnswers.push(d.data()));
+
+  Object.keys(pending).forEach(k => delete pending[k]);
+  Object.assign(pending, myAnswers);
+
+  if (!schema.length) {
+    container.innerHTML = `
+      <div class="empty-state"><div class="icon">📋</div>
+        <p>まだ問題の型が作られていません<br>最初の人が型を作成してください</p></div>
+      <button class="btn-primary" style="margin-top:16px;width:100%" onclick="showSchemaModal()">
+        ＋ 問題の型を作成する
+      </button>`;
+    return;
+  }
+  container.innerHTML = buildAnswerHTML(schema, myAnswers, allAnswers);
+}
+
+function buildAnswerHTML(schema, myAnswers, allAnswers) {
+  const total = allAnswers.length;
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:20px;flex-wrap:wrap;gap:8px;">
+    <div style="font-size:0.82rem;color:#999">${total}人が回答済み</div>
+    <button class="btn-ghost" style="font-size:0.78rem;padding:6px 12px" onclick="showSchemaModal()">型を編集</button>
+  </div>`;
+
+  schema.forEach((daimo, di) => {
+    html += `<div style="margin-bottom:28px;">
+      <div style="font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:1rem;
+        margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--border);">大問 ${di+1}</div>`;
+
+    daimo.questions.forEach((q, qi) => {
+      const key   = `${di}-${qi}`;
+      const myAns = myAnswers[key] || '';
+      const ti    = Q_TYPE[q.type];
+      const counts = {}; let ttl = 0;
+      allAnswers.forEach(a => { const v=(a.answers||{})[key]; if(v){counts[v]=(counts[v]||0)+1;ttl++;} });
+
+      html += `<div style="background:white;border:1.5px solid var(--border);border-radius:6px;
+        padding:14px 16px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="font-size:0.73rem;font-weight:700;color:white;background:${ti.color};
+            padding:2px 7px;border-radius:3px;">${ti.label}</span>
+          <span style="font-weight:700;font-size:0.9rem;">問${qi+1}</span>
+        </div>`;
+
+      if (q.type === 'choice') {
+        const opts = choiceOpts(q.format, q.count);
+        html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">`;
+        opts.forEach(opt => {
+          const sel = myAns === opt;
+          html += `<button onclick="selectChoice('${key}','${opt}')" data-ck="${key}" data-cv="${opt}"
+            style="padding:8px 18px;border-radius:4px;font-family:inherit;font-size:0.9rem;font-weight:700;
+              cursor:pointer;transition:all 0.15s;
+              background:${sel?'var(--red)':'white'};
+              color:${sel?'white':'var(--ink)'};
+              border:2px solid ${sel?'var(--red)':'var(--border)'}">
+            ${opt}</button>`;
+        });
+        html += `</div>`;
+        if (ttl > 0) {
+          html += `<div>`;
+          opts.forEach(opt => {
+            const cnt = counts[opt]||0;
+            const pct = Math.round(cnt/ttl*100);
+            html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:0.78rem;">
+              <span style="width:22px;font-weight:700;color:var(--ink-light)">${opt}</span>
+              <div style="flex:1;background:#f0ebe0;border-radius:3px;height:18px;position:relative;">
+                <div style="width:${pct}%;background:var(--red);height:100%;border-radius:3px;opacity:0.65;transition:width 0.4s;"></div>
+                <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);
+                  font-size:0.73rem;font-weight:700;">${pct}% (${cnt}人)</span>
+              </div></div>`;
+          });
+          html += `</div>`;
+        }
+      } else if (q.type === 'extract') {
+        html += `<input class="input-field" type="text" placeholder="抜き出した言葉を入力..."
+          value="${esc(myAns)}" onchange="pending['${key}']=this.value" style="margin-bottom:8px;">`;
+        if (ttl > 0) {
+          const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+          html += `<div style="font-size:0.78rem;color:#999;margin-top:4px;">みんなの回答：`;
+          sorted.forEach(([val,cnt]) => {
+            html += `<span style="background:var(--paper);border:1px solid var(--border);
+              padding:2px 8px;border-radius:12px;margin:0 4px 4px 0;display:inline-block;">
+              ${esc(val)} <strong>${cnt}人</strong></span>`;
+          });
+          html += `</div>`;
+        }
+      } else {
+        html += `<div style="background:var(--paper);border:1px dashed var(--border);
+          border-radius:4px;padding:10px;font-size:0.82rem;color:#bbb;text-align:center;">
+          記述問題は入力できません</div>`;
+      }
+      html += `</div>`;
+    });
+    html += `</div>`;
+  });
+
+  html += `<button class="btn-primary" style="width:100%;margin-top:8px" onclick="saveAllAnswers()">
+    回答を保存する</button>`;
+  return html;
+}
+
+window.selectChoice = (key, val) => {
+  pending[key] = val;
+  document.querySelectorAll(`[data-ck="${key}"]`).forEach(btn => {
+    const sel = btn.dataset.cv === val;
+    btn.style.background  = sel ? 'var(--red)' : 'white';
+    btn.style.color       = sel ? 'white' : 'var(--ink)';
+    btn.style.borderColor = sel ? 'var(--red)' : 'var(--border)';
+  });
+};
+
+window.saveAllAnswers = async () => {
+  if (!nickname) { showNickModal(); return; }
+  if (!Object.keys(pending).length) { alert('回答を入力してください'); return; }
+  const ref = myAnswerRef();
+  const ex  = await getDoc(ref);
+  await setDoc(ref, { answers: {...(ex.exists()?ex.data().answers:{}), ...pending}, nick: nickname, updatedAt: serverTimestamp() });
+  if (!ex.exists()) await updateDoc(subjectRef(), { answerCount: increment(1) });
+  await loadAnswerForm();
+  alert('回答を保存しました！');
+};
+
+// ===== 型作成 =====
+window.showSchemaModal = () => {
+  if (!nickname) { showNickModal(); return; }
+  tempSchema = [{ questions: [] }]; renderSchemaEditor();
+  document.getElementById('schemaOverlay').style.display = 'flex';
+};
+window.closeSchemaModal = () => { document.getElementById('schemaOverlay').style.display = 'none'; };
+window.addDaimo = () => { tempSchema.push({ questions: [] }); renderSchemaEditor(); };
+window.addQuestion = di => { tempSchema[di].questions.push({ type:'choice', format:'1,2,3,4,5', count:4 }); renderSchemaEditor(); };
+window.removeQuestion = (di, qi) => { tempSchema[di].questions.splice(qi,1); renderSchemaEditor(); };
+window.updateQuestion = (di, qi, field, value) => { tempSchema[di].questions[qi][field] = field==='count'?parseInt(value):value; renderSchemaEditor(); };
+
+function renderSchemaEditor() {
+  const el = document.getElementById('schema-editor'); if (!el) return;
+  let html = '';
+  tempSchema.forEach((daimo, di) => {
+    html += `<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:14px;margin-bottom:14px;">
+      <div style="font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:0.95rem;margin-bottom:10px;">大問 ${di+1}</div>`;
+    daimo.questions.forEach((q, qi) => {
+      html += `<div style="background:white;border:1px solid var(--border);border-radius:4px;padding:10px 12px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-size:0.8rem;font-weight:700;color:var(--ink-light);min-width:36px;">問${qi+1}</span>
+          <select onchange="updateQuestion(${di},${qi},'type',this.value)" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:0.8rem;background:white;outline:none;">
+            <option value="choice"  ${q.type==='choice' ?'selected':''}>選択</option>
+            <option value="extract" ${q.type==='extract'?'selected':''}>抜き出し</option>
+            <option value="essay"   ${q.type==='essay'  ?'selected':''}>記述</option>
+          </select>`;
+      if (q.type === 'choice') {
+        html += `<select onchange="updateQuestion(${di},${qi},'format',this.value)" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:0.8rem;background:white;outline:none;">
+          ${CHOICE_FORMATS.map(f=>`<option value="${f}" ${q.format===f?'selected':''}>${f.split(',').join('/')}</option>`).join('')}
+          </select>
+          <select onchange="updateQuestion(${di},${qi},'count',this.value)" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:0.8rem;background:white;outline:none;">
+          ${[2,3,4,5].map(n=>`<option value="${n}" ${q.count===n?'selected':''}>${n}択</option>`).join('')}
+          </select>`;
+      }
+      html += `<button onclick="removeQuestion(${di},${qi})" style="margin-left:auto;padding:3px 10px;background:none;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:0.74rem;color:#999;font-family:inherit;">削除</button>
+        </div></div>`;
+    });
+    html += `<button onclick="addQuestion(${di})" style="width:100%;padding:8px;background:none;border:1px dashed var(--border);border-radius:4px;color:var(--ink-light);font-family:inherit;font-size:0.8rem;cursor:pointer;">＋ 問題を追加</button></div>`;
+  });
+  el.innerHTML = html;
+}
+
+window.saveSchema = async () => {
+  if (tempSchema.reduce((s,d)=>s+d.questions.length,0) === 0) { alert('問題を1つ以上追加してください'); return; }
+  await updateDoc(subjectRef(), { schema: tempSchema });
+  closeSchemaModal(); await loadAnswerForm();
+};
+
+// ===== 起動 =====
+loadAnswerForm();
+</script>
+</body>
+</html>
