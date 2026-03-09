@@ -168,7 +168,8 @@ async function loadAnswerForm() {
   const schemaSnap = await getDoc(subjectRef());
   const schema     = schemaSnap.exists() ? (schemaSnap.data().schema || []) : [];
   const mySnap     = await getDoc(myAnswerRef());
-  const myAnswers  = mySnap.exists() ? (mySnap.data().answers || {}) : {};
+  const hasAnswered = mySnap.exists();
+  const myAnswers  = hasAnswered ? (mySnap.data().answers || {}) : {};
   const allSnap    = await getDocs(answersCol());
   const allAnswers = []; allSnap.forEach(d => allAnswers.push(d.data()));
 
@@ -184,7 +185,7 @@ async function loadAnswerForm() {
       </button>`;
     return;
   }
-  container.innerHTML = buildAnswerHTML(schema, myAnswers, allAnswers, weightedMode);
+  container.innerHTML = buildAnswerHTML(schema, myAnswers, allAnswers, weightedMode, hasAnswered);
 }
 
 window.toggleWeighted = () => {
@@ -192,27 +193,27 @@ window.toggleWeighted = () => {
   loadAnswerForm();
 };
 
-function buildAnswerHTML(schema, myAnswers, allAnswers, weighted=false) {
+function buildAnswerHTML(schema, myAnswers, allAnswers, weighted=false, hasAnswered=false) {
   const total = allAnswers.length;
 
-  // 切り替えUI
-  const wActive = weighted ? 'background:var(--red);color:white;border-color:var(--red)' : 'background:white;color:var(--ink-light);border-color:var(--border)';
+  // 切り替えUI（通常が左、重み付きβが右）
   const nActive = !weighted ? 'background:var(--red);color:white;border-color:var(--red)' : 'background:white;color:var(--ink-light);border-color:var(--border)';
+  const wActive = weighted  ? 'background:var(--red);color:white;border-color:var(--red)' : 'background:white;color:var(--ink-light);border-color:var(--border)';
 
   let html = `<div style="display:flex;justify-content:space-between;align-items:center;
     margin-bottom:20px;flex-wrap:wrap;gap:8px;">
     <div style="font-size:0.82rem;color:#999">${total}人が回答済み</div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <div style="display:flex;border:1.5px solid var(--border);border-radius:6px;overflow:hidden;">
-        <button onclick="toggleWeighted()" id="weightedBtn"
+        <button onclick="toggleWeighted()"
           style="padding:5px 12px;font-size:0.75rem;font-family:inherit;cursor:pointer;
-            border:none;transition:all 0.15s;${wActive}">
-          重み付き <span style="font-size:0.65rem;vertical-align:super;opacity:0.8;">β</span>
+            border:none;transition:all 0.15s;${nActive}">
+          通常
         </button>
         <button onclick="toggleWeighted()"
           style="padding:5px 12px;font-size:0.75rem;font-family:inherit;cursor:pointer;
-            border:none;border-left:1.5px solid var(--border);transition:all 0.15s;${nActive}">
-          通常
+            border:none;border-left:1.5px solid var(--border);transition:all 0.15s;${wActive}">
+          重み付き <span style="font-size:0.65rem;vertical-align:super;opacity:0.8;">β</span>
         </button>
       </div>
       <button class="btn-ghost" style="font-size:0.78rem;padding:5px 10px" onclick="showSchemaModal()">型を編集</button>
@@ -259,34 +260,45 @@ function buildAnswerHTML(schema, myAnswers, allAnswers, weighted=false) {
             ${opt}</button>`;
         });
         html += `</div>`;
-        if (ttl > 0) {
+        if (!hasAnswered) {
+          html += `<div style="margin-top:6px;padding:10px 12px;background:var(--paper);
+            border:1px dashed var(--border);border-radius:4px;font-size:0.8rem;color:#aaa;text-align:center;">
+            🔒 回答を保存すると他の人の結果が表示されます
+          </div>`;
+        } else if (ttl > 0) {
           html += `<div>`;
           opts.forEach(opt => {
             const cnt = counts[opt]||0;
             const pct = Math.round(cnt/ttl*100);
-            html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:0.78rem;">
-              <span style="width:22px;font-weight:700;color:var(--ink-light)">${opt}</span>
+            const label = weighted ? \`\${pct}%\` : \`\${pct}% (\${Math.round(counts[opt]||0)}人)\`;
+            html += \`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:0.78rem;">
+              <span style="width:22px;font-weight:700;color:var(--ink-light)">\${opt}</span>
               <div style="flex:1;background:#f0ebe0;border-radius:3px;height:18px;position:relative;">
-                <div style="width:${pct}%;background:var(--red);height:100%;border-radius:3px;opacity:0.65;transition:width 0.4s;"></div>
+                <div style="width:\${pct}%;background:var(--red);height:100%;border-radius:3px;opacity:0.65;transition:width 0.4s;"></div>
                 <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);
-                  font-size:0.73rem;font-weight:700;">${pct}% (${cnt}人)</span>
-              </div></div>`;
+                  font-size:0.73rem;font-weight:700;">\${label}</span>
+              </div></div>\`;
           });
           html += `</div>`;
         }
       } else if (q.type === 'extract') {
         html += `<input class="input-field" type="text" placeholder="抜き出した言葉を入力..."
           value="${esc(myAns)}" onchange="pending['${key}']=this.value" style="margin-bottom:8px;">`;
-        if (ttl > 0) {
+        if (!hasAnswered) {
+          html += `<div style="margin-top:6px;padding:10px 12px;background:var(--paper);
+            border:1px dashed var(--border);border-radius:4px;font-size:0.8rem;color:#aaa;text-align:center;">
+            🔒 回答を保存すると他の人の結果が表示されます
+          </div>`;
+        } else if (ttl > 0) {
           const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
-          html += `<div style="font-size:0.78rem;color:#999;margin-top:4px;">みんなの回答：`;
+          html += \`<div style="font-size:0.78rem;color:#999;margin-top:4px;">みんなの回答：\`;
           sorted.forEach(([val,cnt]) => {
-            const dispCnt = weighted ? cnt.toFixed(1) : Math.round(cnt);
-            html += `<span style="background:var(--paper);border:1px solid var(--border);
+            const dispCnt = weighted ? '' : \` <strong>\${Math.round(cnt)}人</strong>\`;
+            html += \`<span style="background:var(--paper);border:1px solid var(--border);
               padding:2px 8px;border-radius:12px;margin:0 4px 4px 0;display:inline-block;">
-              ${esc(val)} <strong>${dispCnt}</strong></span>`;
+              \${esc(val)}\${dispCnt}</span>\`;
           });
-          html += `</div>`;
+          html += \`</div>\`;
         }
       } else {
         html += `<div style="background:var(--paper);border:1px dashed var(--border);
