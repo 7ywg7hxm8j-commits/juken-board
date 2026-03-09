@@ -104,19 +104,7 @@
   </div>
 </div>
 
-<!-- ===== 模試：型作成モーダル ===== -->
-<div class="overlay" id="schemaOverlay" style="display:none">
-  <div class="modal" style="max-width:560px;max-height:85vh;overflow-y:auto;">
-    <h2 style="margin-bottom:6px;">📋 問題の型を作成</h2>
-    <p style="font-size:0.82rem;color:var(--ink-light);margin-bottom:20px;">大問・問題タイプを設定してください</p>
-    <div id="schema-editor"></div>
-    <button class="btn-dashed" style="margin-top:8px" onclick="addDaimo()">＋ 大問を追加</button>
-    <div class="modal-actions" style="margin-top:20px">
-      <button class="btn-ghost" onclick="closeSchemaModal()">キャンセル</button>
-      <button class="btn-primary" onclick="saveSchema()">保存する →</button>
-    </div>
-  </div>
-</div>
+
 
 <!-- ===== MAIN ===== -->
 <div class="main-container">
@@ -164,27 +152,12 @@
       <div class="list-grid" id="mosshi-subject-grid"></div>
       <button class="btn-dashed" style="margin-bottom:28px" onclick="showAddSubjectModal()">＋ 教科を追加する</button>
       <div class="section-label"><h2>💬 チャット</h2><div class="line"></div></div>
-      <div class="chat-layout" style="height:280px;min-height:200px">
-        <div class="messages-area" id="mosshi-room-messages"><div class="loading">読み込み中...</div></div>
-        <div class="chat-input-bar">
-          <textarea class="chat-textarea" id="mosshi-room-chat-input"
-            placeholder="メッセージを入力... (Shift+Enterで送信)" rows="1"
-            onkeydown="if(event.key==='Enter'&&event.shiftKey){event.preventDefault();sendRoomMessage();}"
-            oninput="autoResizeTA(this)"></textarea>
-          <button class="btn-send" id="mosshi-room-send-btn" onclick="sendRoomMessage()">送信</button>
-        </div>
-      </div>
+      <button class="btn-secondary" id="mosshi-chat-link" onclick="openMosshiChat()" style="width:100%;margin-top:4px;">
+        💬 チャットルームを開く →
+      </button>
     </div>
 
-    <div class="mosshi-view" id="mosshi-view-subject">
-      <div class="room-header">
-        <div class="room-header-info">
-          <div class="room-header-sup" id="mosshi-subject-sup"></div>
-          <div class="room-header-title" id="mosshi-subject-title"></div>
-        </div>
-      </div>
-      <div id="mosshi-answer-container"><div class="loading">読み込み中...</div></div>
-    </div>
+
   </div>
 
   <!-- 入試タブ -->
@@ -219,25 +192,7 @@
       <button class="btn-dashed" onclick="showCreateRoomModalForCurrentUniv()">＋ この大学に学部・学科を追加する</button>
     </div>
 
-    <div class="nyushi-view" id="nyushi-view-room">
-      <div class="room-header">
-        <div class="room-header-info">
-          <div class="room-header-sup" id="nyushi-room-univ"></div>
-          <div class="room-header-title" id="nyushi-room-dept"></div>
-        </div>
-        <div class="online-badge"><span class="dot-live"></span><span id="nyushi-msg-count">0</span> 件の投稿</div>
-      </div>
-      <div class="chat-layout">
-        <div class="messages-area" id="nyushi-messages"><div class="loading">読み込み中...</div></div>
-        <div class="chat-input-bar">
-          <textarea class="chat-textarea" id="nyushi-chat-input"
-            placeholder="メッセージを入力... (Shift+Enterで送信)" rows="1"
-            onkeydown="if(event.key==='Enter'&&event.shiftKey){event.preventDefault();sendNyushiMessage();}"
-            oninput="autoResizeTA(this)"></textarea>
-          <button class="btn-send" id="nyushi-send-btn" onclick="sendNyushiMessage()">送信</button>
-        </div>
-      </div>
-    </div>
+
   </div>
 
 </div>
@@ -457,7 +412,6 @@ window.enterMosshiRoom = async (roomId, roomName) => {
   document.getElementById('mosshi-room-title').textContent = roomName;
   document.getElementById('mosshi-room-sup').textContent   = currentSeries.name;
   await loadSubjects();
-  startMosshiChat();
 };
 
 async function loadSubjects() {
@@ -469,216 +423,17 @@ async function loadSubjects() {
     grid.innerHTML=`<div style="font-size:0.84rem;color:#bbb;padding:12px 0">まだ教科がありません。下のボタンから追加してください。</div>`;
     return;
   }
-  grid.innerHTML = subjects.map(s=>`
-    <div class="list-card" onclick="enterSubject('${s.id}','${esc(s.name)}')">
+  grid.innerHTML = subjects.map(s=>{
+    const url = `subject.html?seriesId=${encodeURIComponent(currentMosshiRoom.seriesId)}&roomId=${encodeURIComponent(currentMosshiRoom.id)}&subjectId=${encodeURIComponent(s.id)}&subjectName=${encodeURIComponent(s.name)}&sup=${encodeURIComponent(currentMosshiRoom.name)}`;
+    return `<div class="list-card" onclick="location.href='${url}'">
       <div><div class="list-card-title">${esc(s.name)}</div><div class="list-card-sub">回答 ${s.answerCount||0}件</div></div>
       <div class="list-card-chevron">›</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
-function startMosshiChat() {
-  if (unsubMosshi) unsubMosshi();
-  const area = document.getElementById('mosshi-room-messages');
-  area.innerHTML = '<div class="loading">読み込み中...</div>';
-  const q = query(collection(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id,'messages'),orderBy('createdAt','asc'));
-  unsubMosshi = onSnapshot(q, snap => {
-    const msgs=[]; snap.forEach(d=>msgs.push({id:d.id,...d.data()}));
-    const atBot = area.scrollHeight-area.scrollTop-area.clientHeight < 80;
-    document.getElementById('mosshi-room-msg-count').textContent = msgs.length;
-    area.innerHTML = renderMsgs(msgs, nickname);
-    if (atBot) area.scrollTop = area.scrollHeight;
-  });
-}
 
-window.sendRoomMessage = async () => {
-  const input = document.getElementById('mosshi-room-chat-input');
-  const btn   = document.getElementById('mosshi-room-send-btn');
-  const text = input.value.trim();
-  if (!text || !currentMosshiRoom) return;
-  input.value=''; window.autoResizeTA(input); btn.disabled=true;
-  try {
-    await addDoc(collection(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id,'messages'),
-      { nick:nickname, text, createdAt:serverTimestamp() });
-    await updateDoc(doc(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id),{msgCount:increment(1)});
-  } finally { btn.disabled=false; input.focus(); }
-};
 
-window.enterSubject = async (subjectId, subjectName) => {
-  currentSubject = { id: subjectId, name: subjectName };
-  showMosshiView('mosshi-view-subject');
-  setBreadcrumb([
-    { label: 'トップ', fn: "renderSeriesList()" },
-    { label: currentSeries.name, fn: `enterSeries('${currentSeries.id}','${esc(currentSeries.name)}')` },
-    { label: currentMosshiRoom.name, fn: `enterMosshiRoom('${currentMosshiRoom.id}','${esc(currentMosshiRoom.name)}')` },
-    { label: subjectName }
-  ]);
-  document.getElementById('mosshi-subject-title').textContent = subjectName;
-  document.getElementById('mosshi-subject-sup').textContent   = currentMosshiRoom.name;
-  await loadAnswerForm();
-};
-
-async function loadAnswerForm() {
-  const container = document.getElementById('mosshi-answer-container');
-  container.innerHTML = '<div class="loading">読み込み中...</div>';
-  const schemaSnap = await getDoc(doc(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id,'subjects',currentSubject.id));
-  const schema = schemaSnap.exists() ? (schemaSnap.data().schema||[]) : [];
-  const mySnap = await getDoc(doc(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id,'subjects',currentSubject.id,'answers',nickname||'__guest__'));
-  const myAnswers = mySnap.exists() ? (mySnap.data().answers||{}) : {};
-  const allSnap = await getDocs(collection(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id,'subjects',currentSubject.id,'answers'));
-  const allAnswers=[]; allSnap.forEach(d=>allAnswers.push(d.data()));
-
-  Object.keys(pending).forEach(k=>delete pending[k]);
-  Object.assign(pending, myAnswers);
-
-  if (!schema.length) {
-    container.innerHTML=`<div class="empty-state"><div class="icon">📋</div><p>まだ問題の型が作られていません<br>最初の人が型を作成してください</p></div>
-      <button class="btn-primary" style="margin-top:16px;width:100%" onclick="showSchemaModal()">＋ 問題の型を作成する</button>`;
-    return;
-  }
-  container.innerHTML = buildAnswerHTML(schema, myAnswers, allAnswers);
-}
-
-function buildAnswerHTML(schema, myAnswers, allAnswers) {
-  const total = allAnswers.length;
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px;">
-    <div style="font-size:0.82rem;color:#999">${total}人が回答済み</div>
-    <button class="btn-ghost" style="font-size:0.78rem;padding:6px 12px" onclick="showSchemaModal()">型を編集</button></div>`;
-
-  schema.forEach((daimo,di) => {
-    html += `<div style="margin-bottom:28px;">
-      <div style="font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:1rem;
-        margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--border);">大問 ${di+1}</div>`;
-    daimo.questions.forEach((q,qi) => {
-      const key = `${di}-${qi}`;
-      const myAns = myAnswers[key]||'';
-      const ti = Q_TYPE[q.type];
-      const counts={}; let ttl=0;
-      allAnswers.forEach(a=>{ const v=(a.answers||{})[key]; if(v){counts[v]=(counts[v]||0)+1;ttl++;} });
-
-      html += `<div style="background:white;border:1.5px solid var(--border);border-radius:6px;padding:14px 16px;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-          <span style="font-size:0.73rem;font-weight:700;color:white;background:${ti.color};padding:2px 7px;border-radius:3px;">${ti.label}</span>
-          <span style="font-weight:700;font-size:0.9rem;">問${qi+1}</span></div>`;
-
-      if (q.type==='choice') {
-        const opts = choiceOpts(q.format,q.count);
-        html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">`;
-        opts.forEach(opt => {
-          const sel = myAns===opt;
-          html += `<button onclick="selectChoice('${key}','${opt}')" data-ck="${key}" data-cv="${opt}"
-            style="padding:8px 18px;border-radius:4px;font-family:inherit;font-size:0.9rem;font-weight:700;
-              cursor:pointer;transition:all 0.15s;background:${sel?'var(--red)':'white'};
-              color:${sel?'white':'var(--ink)'};border:2px solid ${sel?'var(--red)':'var(--border)'}">
-            ${opt}</button>`;
-        });
-        html += `</div>`;
-        if (ttl>0) {
-          html+=`<div>`;
-          opts.forEach(opt=>{
-            const cnt=counts[opt]||0; const pct=Math.round(cnt/ttl*100);
-            html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:0.78rem;">
-              <span style="width:22px;font-weight:700;color:var(--ink-light)">${opt}</span>
-              <div style="flex:1;background:#f0ebe0;border-radius:3px;height:18px;position:relative;">
-                <div style="width:${pct}%;background:var(--red);height:100%;border-radius:3px;opacity:0.65;"></div>
-                <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:0.73rem;font-weight:700;">${pct}% (${cnt}人)</span>
-              </div></div>`;
-          });
-          html+=`</div>`;
-        }
-      } else if (q.type==='extract') {
-        html+=`<input class="input-field" type="text" placeholder="抜き出した言葉を入力..." value="${esc(myAns)}"
-          onchange="pending['${key}']=this.value" style="margin-bottom:8px;">`;
-        if (ttl>0) {
-          const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
-          html+=`<div style="font-size:0.78rem;color:#999;margin-top:4px;">みんなの回答：`;
-          sorted.forEach(([val,cnt])=>{ html+=`<span style="background:var(--paper);border:1px solid var(--border);padding:2px 8px;border-radius:12px;margin:0 4px 4px 0;display:inline-block;">${esc(val)} <strong>${cnt}人</strong></span>`; });
-          html+=`</div>`;
-        }
-      } else {
-        html+=`<div style="background:var(--paper);border:1px dashed var(--border);border-radius:4px;padding:10px;font-size:0.82rem;color:#bbb;text-align:center;">記述問題は入力できません</div>`;
-      }
-      html+=`</div>`;
-    });
-    html+=`</div>`;
-  });
-  html+=`<button class="btn-primary" style="width:100%;margin-top:8px" onclick="saveAllAnswers()">回答を保存する</button>`;
-  return html;
-}
-
-function choiceOpts(format,count) {
-  const map={'1,2,3,4,5':['1','2','3','4','5'],'a,b,c,d,e':['a','b','c','d','e'],'ア,イ,ウ,エ,オ':['ア','イ','ウ','エ','オ'],'A,B,C,D,E':['A','B','C','D','E']};
-  return (map[format]||['1','2','3','4','5']).slice(0,count||4);
-}
-
-window.selectChoice = (key,val) => {
-  pending[key]=val;
-  document.querySelectorAll(`[data-ck="${key}"]`).forEach(btn=>{
-    const sel=btn.dataset.cv===val;
-    btn.style.background=sel?'var(--red)':'white';
-    btn.style.color=sel?'white':'var(--ink)';
-    btn.style.borderColor=sel?'var(--red)':'var(--border)';
-  });
-};
-
-window.saveAllAnswers = async () => {
-  if (!nickname) { alert('ニックネームを入力してください'); return; }
-  if (!Object.keys(pending).length) { alert('回答を入力してください'); return; }
-  const ref = doc(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id,'subjects',currentSubject.id,'answers',nickname);
-  const ex = await getDoc(ref);
-  await setDoc(ref,{answers:{...(ex.exists()?ex.data().answers:{}), ...pending},nick:nickname,updatedAt:serverTimestamp()});
-  if (!ex.exists()) await updateDoc(doc(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id,'subjects',currentSubject.id),{answerCount:increment(1)});
-  await loadAnswerForm();
-  alert('回答を保存しました！');
-};
-
-// 型作成
-window.showSchemaModal = () => {
-  if (!nickname) { alert('ニックネームを入力してください'); return; }
-  tempSchema=[{questions:[]}]; renderSchemaEditor();
-  document.getElementById('schemaOverlay').style.display='flex';
-};
-window.closeSchemaModal = () => { document.getElementById('schemaOverlay').style.display='none'; };
-window.addDaimo = () => { tempSchema.push({questions:[]}); renderSchemaEditor(); };
-window.addQuestion = di => { tempSchema[di].questions.push({type:'choice',format:'1,2,3,4,5',count:4}); renderSchemaEditor(); };
-window.removeQuestion = (di,qi) => { tempSchema[di].questions.splice(qi,1); renderSchemaEditor(); };
-window.updateQuestion = (di,qi,field,value) => { tempSchema[di].questions[qi][field]=field==='count'?parseInt(value):value; renderSchemaEditor(); };
-
-function renderSchemaEditor() {
-  const el=document.getElementById('schema-editor'); if(!el) return;
-  let html='';
-  tempSchema.forEach((daimo,di)=>{
-    html+=`<div style="background:var(--paper);border:1px solid var(--border);border-radius:6px;padding:14px;margin-bottom:14px;">
-      <div style="font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:0.95rem;margin-bottom:10px;">大問 ${di+1}</div>`;
-    daimo.questions.forEach((q,qi)=>{
-      html+=`<div style="background:white;border:1px solid var(--border);border-radius:4px;padding:10px 12px;margin-bottom:8px;">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span style="font-size:0.8rem;font-weight:700;color:var(--ink-light);min-width:36px;">問${qi+1}</span>
-          <select onchange="updateQuestion(${di},${qi},'type',this.value)" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:0.8rem;background:white;outline:none;">
-            <option value="choice" ${q.type==='choice'?'selected':''}>選択</option>
-            <option value="extract" ${q.type==='extract'?'selected':''}>抜き出し</option>
-            <option value="essay" ${q.type==='essay'?'selected':''}>記述</option>
-          </select>`;
-      if(q.type==='choice'){
-        html+=`<select onchange="updateQuestion(${di},${qi},'format',this.value)" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:0.8rem;background:white;outline:none;">
-          ${CHOICE_FORMATS.map(f=>`<option value="${f}" ${q.format===f?'selected':''}>${f.split(',').join('/')}</option>`).join('')}
-          </select>
-          <select onchange="updateQuestion(${di},${qi},'count',this.value)" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:4px;font-family:inherit;font-size:0.8rem;background:white;outline:none;">
-          ${[2,3,4,5].map(n=>`<option value="${n}" ${q.count===n?'selected':''}>${n}択</option>`).join('')}
-          </select>`;
-      }
-      html+=`<button onclick="removeQuestion(${di},${qi})" style="margin-left:auto;padding:3px 10px;background:none;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-size:0.74rem;color:#999;font-family:inherit;">削除</button>
-        </div></div>`;
-    });
-    html+=`<button onclick="addQuestion(${di})" style="width:100%;padding:8px;background:none;border:1px dashed var(--border);border-radius:4px;color:var(--ink-light);font-family:inherit;font-size:0.8rem;cursor:pointer;">＋ 問題を追加</button></div>`;
-  });
-  el.innerHTML=html;
-}
-
-window.saveSchema = async () => {
-  if (tempSchema.reduce((s,d)=>s+d.questions.length,0)===0) { alert('問題を1つ以上追加してください'); return; }
-  await updateDoc(doc(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id,'subjects',currentSubject.id),{schema:tempSchema});
-  closeSchemaModal(); await loadAnswerForm();
-};
 
 // 回・教科追加
 window.showAddRoomModal = () => { if(!nickname){showNickModal();return;} document.getElementById('addRoomOverlay').style.display='flex'; };
@@ -759,36 +514,11 @@ window.enterUniv = univ => {
 };
 
 window.enterNyushiRoom = (roomId,univ,dept) => {
-  if(!nickname){showNickModal();return;}
-  currentNyushiRoomId=roomId;
-  showNyushiView('nyushi-view-room');
-  setBreadcrumb([{label:'トップ',fn:"resetNyushi()"},{label:univ,fn:`enterUniv('${esc(univ)}')`},{label:dept}]);
-  document.getElementById('nyushi-room-univ').textContent=univ;
-  document.getElementById('nyushi-room-dept').textContent=dept;
-  const area=document.getElementById('nyushi-messages');
-  area.innerHTML='<div class="loading">読み込み中...</div>';
-  if(unsubNyushi)unsubNyushi();
-  const q=query(collection(db,'rooms',roomId,'messages'),orderBy('createdAt','asc'));
-  unsubNyushi=onSnapshot(q,snap=>{
-    const msgs=[]; snap.forEach(d=>msgs.push({id:d.id,...d.data()}));
-    const atBot=area.scrollHeight-area.scrollTop-area.clientHeight<80;
-    document.getElementById('nyushi-msg-count').textContent=msgs.length;
-    area.innerHTML=renderMsgs(msgs,nickname);
-    if(atBot)area.scrollTop=area.scrollHeight;
-  });
+  const url = `room.html?type=nyushi&roomId=${encodeURIComponent(roomId)}&roomName=${encodeURIComponent(dept)}&sup=${encodeURIComponent(univ)}`;
+  location.href = url;
 };
 
-window.sendNyushiMessage = async () => {
-  const input=document.getElementById('nyushi-chat-input');
-  const btn=document.getElementById('nyushi-send-btn');
-  const text=input.value.trim();
-  if(!text||!currentNyushiRoomId)return;
-  input.value=''; window.autoResizeTA(input); btn.disabled=true;
-  try {
-    await addDoc(collection(db,'rooms',currentNyushiRoomId,'messages'),{nick:nickname,text,createdAt:serverTimestamp()});
-    await updateDoc(doc(db,'rooms',currentNyushiRoomId),{msgCount:increment(1)});
-  } finally{btn.disabled=false;input.focus();}
-};
+
 
 window.showCreateRoomModal = () => {
   if(!nickname){showNickModal();return;}
@@ -810,17 +540,24 @@ window.submitCreateRoom = async () => {
   const dup=allRooms.find(r=>r.univ===univ&&r.dept===dept);
   if(dup){closeCreateRoomModal();enterNyushiRoom(dup.id,dup.univ,dup.dept);return;}
   const ref=await addDoc(collection(db,'rooms'),{univ,dept,msgCount:0,createdAt:serverTimestamp()});
-  closeCreateRoomModal(); await loadNyushiRooms();
-  enterNyushiRoom(ref.id,univ,dept);
+  closeCreateRoomModal();
+  const url = `room.html?type=nyushi&roomId=${encodeURIComponent(ref.id)}&roomName=${encodeURIComponent(dept)}&sup=${encodeURIComponent(univ)}`;
+  location.href = url;
 };
 
 function resetNyushi() {
-  if(unsubNyushi){unsubNyushi();unsubNyushi=null;}
   currentNyushiRoomId=null; currentUniv=null;
   showNyushiView('nyushi-view-list');
   setBreadcrumb([]);
   loadNyushiRooms();
 }
+
+// チャットページへ遷移
+window.openMosshiChat = () => {
+  if (!currentMosshiRoom) return;
+  const url = `room.html?type=mosshi&seriesId=${encodeURIComponent(currentMosshiRoom.seriesId)}&roomId=${encodeURIComponent(currentMosshiRoom.id)}&roomName=${encodeURIComponent(currentMosshiRoom.name)}&sup=${encodeURIComponent(currentSeries ? currentSeries.name : '')}`;
+  location.href = url;
+};
 
 // ===== 初期化 =====
 renderSeriesList();
