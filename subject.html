@@ -104,9 +104,21 @@ const Q_TYPE = {
   essay:   { label: '記述',    color: '#7D3C98' },
 };
 
-let nickname  = localStorage.getItem('juken_nick') || '';
-let tempSchema = [];
-const pending  = {};
+// ===== 重み付け定数（ここを変えると調整できる） =====
+const LEVEL_WEIGHTS = {
+  'toukyouikkou': 2.0,
+  'kyutei':       1.6,
+  'soukei':       1.4,
+  'march':        1.2,
+  'nittokomassen':1.0,
+  'none':         1.0,
+  '':             1.0,
+};
+
+let nickname    = localStorage.getItem('juken_nick') || '';
+let tempSchema  = [];
+const pending   = {};
+let weightedMode = false;
 
 // ===== ニックネーム =====
 function applyNick(nick) {
@@ -172,15 +184,39 @@ async function loadAnswerForm() {
       </button>`;
     return;
   }
-  container.innerHTML = buildAnswerHTML(schema, myAnswers, allAnswers);
+  container.innerHTML = buildAnswerHTML(schema, myAnswers, allAnswers, weightedMode);
 }
 
-function buildAnswerHTML(schema, myAnswers, allAnswers) {
+window.toggleWeighted = () => {
+  weightedMode = !weightedMode;
+  loadAnswerForm();
+};
+
+function buildAnswerHTML(schema, myAnswers, allAnswers, weighted=false) {
   const total = allAnswers.length;
+
+  // 切り替えUI
+  const wActive = weighted ? 'background:var(--red);color:white;border-color:var(--red)' : 'background:white;color:var(--ink-light);border-color:var(--border)';
+  const nActive = !weighted ? 'background:var(--red);color:white;border-color:var(--red)' : 'background:white;color:var(--ink-light);border-color:var(--border)';
+
   let html = `<div style="display:flex;justify-content:space-between;align-items:center;
     margin-bottom:20px;flex-wrap:wrap;gap:8px;">
     <div style="font-size:0.82rem;color:#999">${total}人が回答済み</div>
-    <button class="btn-ghost" style="font-size:0.78rem;padding:6px 12px" onclick="showSchemaModal()">型を編集</button>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="display:flex;border:1.5px solid var(--border);border-radius:6px;overflow:hidden;">
+        <button onclick="toggleWeighted()" id="weightedBtn"
+          style="padding:5px 12px;font-size:0.75rem;font-family:inherit;cursor:pointer;
+            border:none;transition:all 0.15s;${wActive}">
+          重み付き <span style="font-size:0.65rem;vertical-align:super;opacity:0.8;">β</span>
+        </button>
+        <button onclick="toggleWeighted()"
+          style="padding:5px 12px;font-size:0.75rem;font-family:inherit;cursor:pointer;
+            border:none;border-left:1.5px solid var(--border);transition:all 0.15s;${nActive}">
+          通常
+        </button>
+      </div>
+      <button class="btn-ghost" style="font-size:0.78rem;padding:5px 10px" onclick="showSchemaModal()">型を編集</button>
+    </div>
   </div>`;
 
   schema.forEach((daimo, di) => {
@@ -193,7 +229,13 @@ function buildAnswerHTML(schema, myAnswers, allAnswers) {
       const myAns = myAnswers[key] || '';
       const ti    = Q_TYPE[q.type];
       const counts = {}; let ttl = 0;
-      allAnswers.forEach(a => { const v=(a.answers||{})[key]; if(v){counts[v]=(counts[v]||0)+1;ttl++;} });
+      allAnswers.forEach(a => {
+        const v = (a.answers||{})[key];
+        if (!v) return;
+        const w = weighted ? (LEVEL_WEIGHTS[a.level || ''] || 1.0) : 1.0;
+        counts[v] = (counts[v] || 0) + w;
+        ttl += w;
+      });
 
       html += `<div style="background:white;border:1.5px solid var(--border);border-radius:6px;
         padding:14px 16px;margin-bottom:10px;">
@@ -239,9 +281,10 @@ function buildAnswerHTML(schema, myAnswers, allAnswers) {
           const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
           html += `<div style="font-size:0.78rem;color:#999;margin-top:4px;">みんなの回答：`;
           sorted.forEach(([val,cnt]) => {
+            const dispCnt = weighted ? cnt.toFixed(1) : Math.round(cnt);
             html += `<span style="background:var(--paper);border:1px solid var(--border);
               padding:2px 8px;border-radius:12px;margin:0 4px 4px 0;display:inline-block;">
-              ${esc(val)} <strong>${cnt}人</strong></span>`;
+              ${esc(val)} <strong>${dispCnt}</strong></span>`;
           });
           html += `</div>`;
         }
@@ -275,7 +318,8 @@ window.saveAllAnswers = async () => {
   if (!Object.keys(pending).length) { alert('回答を入力してください'); return; }
   const ref = myAnswerRef();
   const ex  = await getDoc(ref);
-  await setDoc(ref, { answers: {...(ex.exists()?ex.data().answers:{}), ...pending}, nick: nickname, updatedAt: serverTimestamp() });
+  const level = localStorage.getItem('juken_level') || '';
+  await setDoc(ref, { answers: {...(ex.exists()?ex.data().answers:{}), ...pending}, nick: nickname, level, updatedAt: serverTimestamp() });
   if (!ex.exists()) await updateDoc(subjectRef(), { answerCount: increment(1) });
   await loadAnswerForm();
   alert('回答を保存しました！');
