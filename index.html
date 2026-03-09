@@ -40,12 +40,33 @@
 <div class="overlay" id="nickOverlay">
   <div class="modal modal-center">
     <div class="modal-icon">✏️</div>
-    <h2>ニックネームを入力</h2>
+    <h2>参加する</h2>
     <p>登録不要。ニックネームだけで<br>すぐに参加できます。</p>
-    <input class="input-field" type="text" id="nickInput"
-      placeholder="例：東大志望のけんた" maxlength="20"
-      onkeydown="if(event.key==='Enter') saveNick()">
-    <div style="margin-top:4px">
+    <div class="form-group">
+      <label class="form-label">ニックネーム <span style="color:var(--red)">*</span></label>
+      <input class="input-field" type="text" id="nickInput"
+        placeholder="例：東大志望のけんた" maxlength="20"
+        onkeydown="if(event.key==='Enter') saveNick()">
+    </div>
+    <div class="form-group" style="margin-top:14px;">
+      <label class="form-label" style="display:flex;align-items:center;gap:6px;">
+        過去最高判定の大学群
+        <span style="font-size:0.7rem;color:#aaa;font-weight:400;">任意・回答の重み付けに使用</span>
+      </label>
+      <select class="input-field" id="levelInput" style="cursor:pointer;">
+        <option value="">選択しない</option>
+        <option value="toukyouikkou">東京一工</option>
+        <option value="kyutei">旧帝大</option>
+        <option value="soukei">早慶</option>
+        <option value="march">MARCH・関関同立</option>
+        <option value="nittokomassen">日東駒専・産近甲龍</option>
+        <option value="none">該当なし</option>
+      </select>
+      <div style="font-size:0.73rem;color:#bbb;margin-top:5px;line-height:1.5;">
+        ※自己申告です。未選択でも参加できます。
+      </div>
+    </div>
+    <div style="margin-top:16px">
       <button class="btn-primary" style="width:100%" onclick="saveNick()">参加する →</button>
     </div>
   </div>
@@ -112,13 +133,11 @@
   <!-- 模試タブ -->
   <div class="tab-content active" id="content-mosshi">
     <div class="mosshi-view active" id="mosshi-view-series">
-      <div class="hero">
-        <div class="hero-eyebrow">模試 · 回答共有</div>
-        <h1 class="hero-title">模試の答え合わせを<br><span class="accent">みんな</span>でしよう</h1>
-        <p class="hero-sub">選択・抜き出し問題の回答を入力して<br>分布をリアルタイムで確認できます。</p>
+      <div style="padding:20px 0 16px;">
+        <div style="font-size:0.78rem;color:var(--ink-light);letter-spacing:0.08em;margin-bottom:6px;">模試 · 回答共有</div>
+        <h1 style="font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:clamp(1.3rem,4vw,1.8rem);color:var(--ink);">模試シリーズを選ぶ</h1>
       </div>
       <div class="section-label">
-        <h2>📝 模試シリーズ</h2>
         <div class="line"></div>
       </div>
       <div id="mosshi-series-grid"></div>
@@ -222,6 +241,7 @@ const EXAM_SERIES = [
   { id: 'zento-kyotsu',           name: '全統共通テスト模試',                     icon: '📘', org: '河合塾' },
   { id: 'zento-kijutsu',          name: '全統記述模試',                           icon: '📘', org: '河合塾' },
   { id: 'zento-pre-kyotsu',       name: '全統プレ共通テスト',                     icon: '📘', org: '河合塾' },
+  { id: 'zento-shibokobestu',     name: '志望校別模試',                           icon: '📘', org: '河合塾' },
   { id: 'shinken-kijutsu',        name: '進研模試 総合学力記述模試',               icon: '📗', org: 'ベネッセ' },
   { id: 'shinken-kyotsu',         name: '進研模試 大学入学共通テスト模試',         icon: '📗', org: 'ベネッセ' },
   { id: 'benesse-sundai-kyotsu',  name: 'ベネッセ・駿台 大学入学共通テスト模試',   icon: '📙', org: 'ベネッセ・駿台' },
@@ -229,8 +249,11 @@ const EXAM_SERIES = [
   { id: 'sundai-zenkoku',         name: '駿台全国模試',                           icon: '📕', org: '駿台' },
   { id: 'sundai-atama-kyotsu',    name: '駿台atama＋共通テスト模試',              icon: '📕', org: '駿台' },
   { id: 'sundai-atama-pre',       name: '駿台atama＋プレ共通テスト',              icon: '📕', org: '駿台' },
+  { id: 'sundai-shibokobestu',    name: '志望校別模試',                           icon: '📕', org: '駿台' },
   { id: 'toshin-kyotsu',          name: '共通テスト本番レベル模試',                icon: '📓', org: '東進' },
   { id: 'toshin-zenkoku',         name: '全国統一高校生テスト',                   icon: '📓', org: '東進' },
+  { id: 'toshin-shibokobestu',    name: '志望校別模試',                           icon: '📓', org: '東進' },
+  { id: 'other',                  name: 'その他',                                 icon: '📒', org: 'その他' },
 ];
 
 const CHOICE_FORMATS = ['1,2,3,4,5', 'a,b,c,d,e', 'ア,イ,ウ,エ,オ', 'A,B,C,D,E'];
@@ -307,6 +330,8 @@ window.showNickModal = () => { document.getElementById('nickOverlay').style.disp
 window.saveNick = () => {
   const val = document.getElementById('nickInput').value.trim();
   if (!val) { alert('ニックネームを入力してください'); return; }
+  const level = document.getElementById('levelInput').value;
+  localStorage.setItem('juken_level', level);
   document.getElementById('nickOverlay').style.display = 'none';
   applyNick(val);
 };
@@ -314,6 +339,8 @@ window.saveNick = () => {
 const saved = localStorage.getItem('juken_nick');
 if (saved) {
   document.getElementById('nickInput').value = saved;
+  const savedLevel = localStorage.getItem('juken_level') || '';
+  document.getElementById('levelInput').value = savedLevel;
   document.getElementById('nickOverlay').style.display = 'none';
   applyNick(saved);
 }
