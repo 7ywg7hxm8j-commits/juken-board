@@ -132,51 +132,12 @@
 
   <!-- 模試タブ -->
   <div class="tab-content active" id="content-mosshi">
-    <div class="mosshi-view active" id="mosshi-view-series">
-      <div style="padding:20px 0 16px;">
-        <div style="font-size:0.78rem;color:var(--ink-light);letter-spacing:0.08em;margin-bottom:6px;">模試 · 回答共有</div>
-        <h1 style="font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:clamp(1.3rem,4vw,1.8rem);color:var(--ink);">模試シリーズを選ぶ</h1>
-      </div>
-      <div class="section-label">
-        <div class="line"></div>
-      </div>
-      <div id="mosshi-series-grid"></div>
+    <div style="padding:20px 0 16px;">
+      <div style="font-size:0.78rem;color:var(--ink-light);letter-spacing:0.08em;margin-bottom:6px;">模試 · 回答共有</div>
+      <h1 style="font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:clamp(1.3rem,4vw,1.8rem);color:var(--ink);">模試シリーズを選ぶ</h1>
     </div>
-
-    <div class="mosshi-view" id="mosshi-view-rooms">
-      <div class="page-header">
-        <div class="page-header-title" id="mosshi-rooms-title"></div>
-        <div class="page-header-sub">実施回を選んでください</div>
-      </div>
-      <div class="section-label">
-        <h2>📅 実施回一覧</h2>
-        <div class="line"></div>
-        <div class="badge" id="mosshi-rooms-count">0回</div>
-      </div>
-      <div class="card-grid" id="mosshi-rooms-grid"></div>
-      <button class="btn-dashed" style="margin-top:8px" onclick="showAddRoomModal()">＋ 回を追加する</button>
-    </div>
-
-    <div class="mosshi-view" id="mosshi-view-room">
-      <div class="room-header">
-        <div class="room-header-info">
-          <div class="room-header-sup" id="mosshi-room-sup"></div>
-          <div class="room-header-title" id="mosshi-room-title"></div>
-        </div>
-        <div class="online-badge"><span class="dot-live"></span><span id="mosshi-room-msg-count">0</span> 件</div>
-      </div>
-      <div class="section-label" style="margin-bottom:12px">
-        <h2>📚 教科</h2><div class="line"></div>
-      </div>
-      <div class="list-grid" id="mosshi-subject-grid"></div>
-      <button class="btn-dashed" style="margin-bottom:28px" onclick="showAddSubjectModal()">＋ 教科を追加する</button>
-      <div class="section-label"><h2>💬 チャット</h2><div class="line"></div></div>
-      <button class="btn-secondary" id="mosshi-chat-link" onclick="openMosshiChat()" style="width:100%;margin-top:4px;">
-        💬 チャットルームを開く →
-      </button>
-    </div>
-
-
+    <div style="height:1px;background:var(--border);margin-bottom:16px;"></div>
+    <div id="mosshi-series-grid"></div>
   </div>
 
   <!-- 入試タブ -->
@@ -368,11 +329,20 @@ function showNyushiView(id) {
 }
 
 // =============================================
-//  模試機能
+//  模試機能（アコーディオン）
 // =============================================
+// activeSeriesId: 開いている模試ID
+// activeRoomId: 開いている実施回ID
+let activeSeriesId = null;
+let activeRoomId   = null;
+
 function renderSeriesList() {
-  showMosshiView('mosshi-view-series');
   setBreadcrumb([]);
+  activeSeriesId = null;
+  activeRoomId   = null;
+  currentSeries  = null;
+  currentMosshiRoom = null;
+
   const el = document.getElementById('mosshi-series-grid');
   if (!el) return;
 
@@ -381,83 +351,192 @@ function renderSeriesList() {
 
   let html = '';
   Object.entries(groups).forEach(([org, series]) => {
-    html += `<div style="margin-bottom:28px;">
-      <div style="font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:0.88rem;
-        color:var(--ink-light);letter-spacing:0.05em;margin-bottom:10px;padding-bottom:6px;
+    html += `<div style="margin-bottom:24px;">
+      <div style="font-family:'Zen Kaku Gothic New',sans-serif;font-weight:900;font-size:0.85rem;
+        color:var(--ink-light);letter-spacing:0.05em;margin-bottom:8px;padding-bottom:5px;
         border-bottom:1px solid var(--border);">${esc(org)}</div>
-      <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;flex-direction:column;gap:6px;">
         ${series.map(s=>`
-          <div class="list-card" onclick="enterSeries('${s.id}','${esc(s.name)}')">
-            <div><div class="list-card-title">${s.icon} ${esc(s.name)}</div></div>
-            <div class="list-card-chevron">›</div>
+          <div>
+            <div class="list-card" id="series-btn-${s.id}"
+              onclick="toggleSeries('${s.id}','${esc(s.name)}')"
+              style="transition:background 0.15s;">
+              <div><div class="list-card-title">${s.icon} ${esc(s.name)}</div></div>
+              <div class="list-card-chevron" id="series-chev-${s.id}">›</div>
+            </div>
+            <div id="series-panel-${s.id}" style="display:none;"></div>
           </div>`).join('')}
       </div></div>`;
   });
   el.innerHTML = html;
 }
 
-window.enterSeries = async (seriesId, seriesName) => {
-  currentSeries = { id: seriesId, name: seriesName };
-  showMosshiView('mosshi-view-rooms');
-  setBreadcrumb([
-    { label: 'トップ', fn: "renderSeriesList()" },
-    { label: seriesName }
-  ]);
-  document.getElementById('mosshi-rooms-title').textContent = seriesName;
-  await loadMosshiRooms();
+window.toggleSeries = async (seriesId, seriesName) => {
+  // 別の模試が開いていたら閉じる（パネルとroomパネルもリセット）
+  if (activeSeriesId && activeSeriesId !== seriesId) {
+    const oldPanel = document.getElementById('series-panel-'+activeSeriesId);
+    if (oldPanel) oldPanel.style.display = 'none';
+    const oldChev  = document.getElementById('series-chev-'+activeSeriesId);
+    if (oldChev)  oldChev.textContent = '›';
+    const oldBtn   = document.getElementById('series-btn-'+activeSeriesId);
+    if (oldBtn)   oldBtn.style.background = '';
+    // 教科パネルもリセット
+    if (activeRoomId) {
+      const rp = document.getElementById('room-panel-'+activeRoomId);
+      if (rp) rp.style.display = 'none';
+    }
+    activeRoomId = null;
+    currentMosshiRoom = null;
+  }
+
+  const panel = document.getElementById('series-panel-'+seriesId);
+  const chev  = document.getElementById('series-chev-'+seriesId);
+  const btn   = document.getElementById('series-btn-'+seriesId);
+  if (!panel) return;
+
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    // 閉じる
+    panel.style.display = 'none';
+    chev.textContent = '›';
+    btn.style.background = '';
+    activeSeriesId = null;
+    currentSeries  = null;
+    activeRoomId   = null;
+    currentMosshiRoom = null;
+  } else {
+    // 開く
+    activeSeriesId = seriesId;
+    currentSeries  = { id: seriesId, name: seriesName };
+    panel.style.display = 'block';
+    chev.textContent = '∨';
+    btn.style.background = 'var(--paper)';
+    panel.innerHTML = '<div style="padding:10px 0 4px;font-size:0.83rem;color:#bbb;text-align:center;">読み込み中...</div>';
+    await loadRoomsIntoPanel(seriesId, panel);
+  }
 };
 
-async function loadMosshiRooms() {
-  const grid = document.getElementById('mosshi-rooms-grid');
-  grid.innerHTML = '<div class="loading">読み込み中...</div>';
-  const snap = await getDocs(collection(db,'mosshi_series',currentSeries.id,'rooms'));
+async function loadRoomsIntoPanel(seriesId, panel) {
+  const snap = await getDocs(collection(db,'mosshi_series',seriesId,'rooms'));
   const rooms = [];
   snap.forEach(d=>rooms.push({id:d.id,...d.data()}));
-  rooms.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-  document.getElementById('mosshi-rooms-count').textContent = rooms.length+'回';
+  // 最終更新順（updatedAt があれば優先、なければ createdAt）
+  rooms.sort((a,b)=>{
+    const ta = (a.updatedAt||a.createdAt)?.seconds||0;
+    const tb = (b.updatedAt||b.createdAt)?.seconds||0;
+    return tb-ta;
+  });
+
   if (!rooms.length) {
-    grid.innerHTML=`<div class="empty-state"><div class="icon">📭</div><p>まだ部屋がありません<br>「＋ 回を追加する」から作れます</p></div>`;
+    panel.innerHTML = `<div style="padding:10px 0 12px 12px;">
+      <div style="font-size:0.83rem;color:#bbb;margin-bottom:8px;">まだ実施回がありません</div>
+      <button class="btn-dashed" onclick="showAddRoomModal()">＋ 回を追加する</button>
+    </div>`;
     return;
   }
-  grid.innerHTML = rooms.map(r=>`
-    <div class="card" onclick="enterMosshiRoom('${r.id}','${esc(r.name)}')">
-      <div class="card-icon">📅</div>
-      <div class="card-title">${esc(r.name)}</div>
-      <div class="card-meta"><span>💬 ${r.msgCount||0}件</span><span>📝 ${r.subjectCount||0}教科</span></div>
-      <div class="card-arrow">›</div>
-    </div>`).join('');
+
+  let html = `<div style="padding:6px 0 6px 12px;border-left:2px solid var(--border);margin:4px 0 4px 8px;">`;
+  rooms.forEach(r => {
+    html += `<div>
+      <div class="list-card" id="room-btn-${r.id}"
+        onclick="toggleRoom('${r.id}','${esc(r.name)}','${seriesId}')"
+        style="font-size:0.88rem;padding:10px 12px;transition:background 0.15s;">
+        <div>
+          <div style="font-weight:700;">${esc(r.name)}</div>
+          <div style="font-size:0.75rem;color:#aaa;">💬 ${r.msgCount||0}件 · 📝 ${r.subjectCount||0}教科</div>
+        </div>
+        <div id="room-chev-${r.id}" style="color:#bbb;font-size:1rem;">›</div>
+      </div>
+      <div id="room-panel-${r.id}" style="display:none;"></div>
+    </div>`;
+  });
+  html += `<button class="btn-dashed" style="margin:8px 0 4px" onclick="showAddRoomModal()">＋ 回を追加する</button>`;
+  html += `</div>`;
+  panel.innerHTML = html;
 }
 
-window.enterMosshiRoom = async (roomId, roomName) => {
-  currentMosshiRoom = { id: roomId, name: roomName, seriesId: currentSeries.id };
-  showMosshiView('mosshi-view-room');
-  setBreadcrumb([
-    { label: 'トップ', fn: "renderSeriesList()" },
-    { label: currentSeries.name, fn: `enterSeries('${currentSeries.id}','${esc(currentSeries.name)}')` },
-    { label: roomName }
-  ]);
-  document.getElementById('mosshi-room-title').textContent = roomName;
-  document.getElementById('mosshi-room-sup').textContent   = currentSeries.name;
-  await loadSubjects();
+window.toggleRoom = async (roomId, roomName, seriesId) => {
+  // 別の実施回が開いていたら閉じる
+  if (activeRoomId && activeRoomId !== roomId) {
+    const oldP = document.getElementById('room-panel-'+activeRoomId);
+    if (oldP) oldP.style.display = 'none';
+    const oldC = document.getElementById('room-chev-'+activeRoomId);
+    if (oldC) oldC.textContent = '›';
+    const oldB = document.getElementById('room-btn-'+activeRoomId);
+    if (oldB) oldB.style.background = '';
+  }
+
+  const panel = document.getElementById('room-panel-'+roomId);
+  const chev  = document.getElementById('room-chev-'+roomId);
+  const btn   = document.getElementById('room-btn-'+roomId);
+  if (!panel) return;
+
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    chev.textContent = '›';
+    btn.style.background = '';
+    activeRoomId = null;
+    currentMosshiRoom = null;
+  } else {
+    activeRoomId = roomId;
+    currentMosshiRoom = { id: roomId, name: roomName, seriesId };
+    panel.style.display = 'block';
+    chev.textContent = '∨';
+    btn.style.background = 'var(--paper)';
+    panel.innerHTML = '<div style="padding:8px 0 4px 12px;font-size:0.83rem;color:#bbb;">読み込み中...</div>';
+    await loadSubjectsIntoPanel(roomId, seriesId, panel, roomName);
+  }
 };
 
-async function loadSubjects() {
-  const grid = document.getElementById('mosshi-subject-grid');
-  const snap = await getDocs(collection(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id,'subjects'));
+async function loadSubjectsIntoPanel(roomId, seriesId, panel, roomName) {
+  const snap = await getDocs(collection(db,'mosshi_series',seriesId,'rooms',roomId,'subjects'));
   const subjects = [];
   snap.forEach(d=>subjects.push({id:d.id,...d.data()}));
+  // 最終更新順
+  subjects.sort((a,b)=>{
+    const ta = (a.updatedAt||a.createdAt)?.seconds||0;
+    const tb = (b.updatedAt||b.createdAt)?.seconds||0;
+    return tb-ta;
+  });
+
+  let html = `<div style="padding:6px 0 6px 24px;border-left:2px solid #e8e0d0;margin:4px 0 4px 8px;">`;
+
   if (!subjects.length) {
-    grid.innerHTML=`<div style="font-size:0.84rem;color:#bbb;padding:12px 0">まだ教科がありません。下のボタンから追加してください。</div>`;
-    return;
+    html += `<div style="font-size:0.82rem;color:#bbb;margin-bottom:8px;">まだ教科がありません</div>`;
+  } else {
+    subjects.forEach(s => {
+      const url = `subject.html?seriesId=${encodeURIComponent(seriesId)}&roomId=${encodeURIComponent(roomId)}&subjectId=${encodeURIComponent(s.id)}&subjectName=${encodeURIComponent(s.name)}&sup=${encodeURIComponent(roomName)}`;
+      html += `<div class="list-card" onclick="location.href='${url}'"
+        style="font-size:0.86rem;padding:9px 12px;margin-bottom:4px;">
+        <div>
+          <div style="font-weight:700;">${esc(s.name)}</div>
+          <div style="font-size:0.74rem;color:#aaa;">回答 ${s.answerCount||0}件</div>
+        </div>
+        <div style="color:#bbb;">›</div>
+      </div>`;
+    });
   }
-  grid.innerHTML = subjects.map(s=>{
-    const url = `subject.html?seriesId=${encodeURIComponent(currentMosshiRoom.seriesId)}&roomId=${encodeURIComponent(currentMosshiRoom.id)}&subjectId=${encodeURIComponent(s.id)}&subjectName=${encodeURIComponent(s.name)}&sup=${encodeURIComponent(currentMosshiRoom.name)}`;
-    return `<div class="list-card" onclick="location.href='${url}'">
-      <div><div class="list-card-title">${esc(s.name)}</div><div class="list-card-sub">回答 ${s.answerCount||0}件</div></div>
-      <div class="list-card-chevron">›</div>
-    </div>`;
-  }).join('');
+
+  // チャットリンク
+  const chatUrl = `room.html?type=mosshi&seriesId=${encodeURIComponent(seriesId)}&roomId=${encodeURIComponent(roomId)}&roomName=${encodeURIComponent(roomName)}&sup=${encodeURIComponent(currentSeries?currentSeries.name:'')}`;
+  html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+    <button class="btn-dashed" onclick="showAddSubjectModalFor('${roomId}','${seriesId}')">＋ 教科を追加</button>
+    <a href="${chatUrl}" style="padding:8px 14px;border:1px dashed var(--border);border-radius:4px;
+      color:var(--ink-light);font-size:0.82rem;text-decoration:none;font-family:inherit;">
+      💬 チャット →
+    </a>
+  </div>`;
+  html += `</div>`;
+  panel.innerHTML = html;
 }
+
+// 教科追加モーダルを特定のroomIdに紐付けて開く
+window.showAddSubjectModalFor = (roomId, seriesId) => {
+  if (!nickname) { showNickModal(); return; }
+  currentMosshiRoom = { id: roomId, seriesId: seriesId, name: '' };
+  document.getElementById('addSubjectOverlay').style.display = 'flex';
+};
 
 
 
@@ -470,7 +549,9 @@ window.submitAddRoom = async () => {
   if(!name||!currentSeries){alert('名前を入力してください');return;}
   await addDoc(collection(db,'mosshi_series',currentSeries.id,'rooms'),{name,msgCount:0,subjectCount:0,createdAt:serverTimestamp()});
   closeAddRoomModal(); document.getElementById('newRoomName').value='';
-  await loadMosshiRooms();
+  // アコーディオンパネルを再描画
+  const sp = document.getElementById('series-panel-'+currentSeries.id);
+  if (sp) await loadRoomsIntoPanel(currentSeries.id, sp);
 };
 
 window.showAddSubjectModal = () => { if(!nickname){showNickModal();return;} document.getElementById('addSubjectOverlay').style.display='flex'; };
@@ -485,7 +566,9 @@ window.submitAddSubject = async () => {
     {name,answerCount:0,schema:[],createdAt:serverTimestamp()});
   await updateDoc(doc(db,'mosshi_series',currentMosshiRoom.seriesId,'rooms',currentMosshiRoom.id),{subjectCount:increment(1)});
   closeAddSubjectModal(); document.getElementById('newSubjectName').value='';
-  await loadSubjects();
+  // アコーディオンパネルを再描画
+  const rp = document.getElementById('room-panel-'+currentMosshiRoom.id);
+  if (rp) await loadSubjectsIntoPanel(currentMosshiRoom.id, currentMosshiRoom.seriesId, rp, currentMosshiRoom.name||'');
 };
 
 // =============================================
